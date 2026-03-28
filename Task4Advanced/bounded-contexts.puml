@@ -1,0 +1,342 @@
+@startuml
+allowmixing
+!include ../C4/C4_Context.puml
+
+title DDD-декомпозиция: Bounded Contexts, Агрегаты и События
+
+' ===================== BOUNDED CONTEXTS =====================
+
+package "Bounded Context: Пациентский контекст" #BBDEFB {
+  
+  class "Агрегат: Patient" as PatientAgg {
+    - patient_id: UUID
+    - full_name: String
+    - birth_date: Date
+    - snils: String
+    - contact_info: ContactInfo
+    - status: PatientStatus
+    - consents: List
+    --
+    + register()
+    + update_contact()
+    + give_consent()
+  }
+  
+  class "Событие: PatientRegistered" as PatientRegEvent {
+    + event_id: UUID
+    + timestamp: DateTime
+    + patient_id: UUID
+    + full_name: String
+    + birth_date: Date
+    + consent_flags: Map
+  }
+  
+  class "Событие: PatientConsentGiven" as PatientConsentEvent {
+    + patient_id: UUID
+    + consent_type: String
+    + valid_from: Date
+  }
+  
+  PatientAgg --> PatientRegEvent : генерирует
+  PatientAgg --> PatientConsentEvent : генерирует
+}
+
+package "Bounded Context: Медицинский контекст" #BBDEFB {
+  
+  class "Агрегат: EpisodeOfCare" as EpisodeAgg {
+    - episode_id: UUID
+    - patient_id: UUID
+    - start_date: DateTime
+    - end_date: DateTime
+    - department: String
+    - diagnosis: List
+    - status: String
+    --
+    + start_episode()
+    + close_episode()
+    + add_diagnosis()
+  }
+  
+  class "Событие: EpisodeStarted" as EpisodeStartEvent {
+    + episode_id: UUID
+    + patient_id: UUID
+    + department: String
+    + timestamp: DateTime
+  }
+  
+  class "Событие: EpisodeClosed" as EpisodeCloseEvent {
+    + episode_id: UUID
+    + patient_id: UUID
+    + duration_days: Int
+    + outcome: String
+  }
+  
+  EpisodeAgg --> EpisodeStartEvent : генерирует
+  EpisodeAgg --> EpisodeCloseEvent : генерирует
+}
+
+package "Bounded Context: Кредитный контекст" #C8E6C9 {
+  
+  class "Агрегат: CreditApplication" as CreditAppAgg {
+    - application_id: UUID
+    - customer_id: UUID
+    - amount: Decimal
+    - term: Int
+    - risk_score: Decimal
+    - status: String
+    --
+    + submit()
+    + approve()
+    + reject()
+  }
+  
+  class "Агрегат: CreditAgreement" as CreditAgreementAgg {
+    - agreement_id: UUID
+    - application_id: UUID
+    - amount: Decimal
+    - rate: Decimal
+    - monthly_payment: Decimal
+    - status: String
+    --
+    + sign()
+    + activate()
+  }
+  
+  class "Событие: CreditApplicationApproved" as CreditApprovedEvent {
+    + application_id: UUID
+    + customer_id: UUID
+    + amount: Decimal
+    + rate: Decimal
+  }
+  
+  class "Событие: CreditAgreementSigned" as AgreementSignedEvent {
+    + agreement_id: UUID
+    + customer_id: UUID
+    + monthly_payment: Decimal
+  }
+  
+  CreditAppAgg --> CreditApprovedEvent : генерирует
+  CreditAgreementAgg --> AgreementSignedEvent : генерирует
+}
+
+package "Bounded Context: Платёжный контекст" #C8E6C9 {
+  
+  class "Агрегат: Transaction" as TransactionAgg {
+    - transaction_id: UUID
+    - from_account: String
+    - to_account: String
+    - amount: Decimal
+    - status: String
+    - timestamp: DateTime
+    --
+    + execute()
+    + rollback()
+  }
+  
+  class "Событие: TransactionCompleted" as TxCompletedEvent {
+    + transaction_id: UUID
+    + amount: Decimal
+    + timestamp: DateTime
+  }
+  
+  TransactionAgg --> TxCompletedEvent : генерирует
+}
+
+package "Bounded Context: Медицинский анализ" #FFE0B2 {
+  
+  class "Агрегат: AnalysisRequest" as AnalysisAgg {
+    - request_id: UUID
+    - patient_id: UUID
+    - analysis_type: String
+    - findings: String
+    - confidence_score: Decimal
+    - status: String
+    --
+    + start_analysis()
+    + complete_analysis()
+  }
+  
+  class "Событие: AnalysisCompleted" as AnalysisCompletedEvent {
+    + request_id: UUID
+    + patient_id: UUID
+    + findings: String
+    + confidence_score: Decimal
+  }
+  
+  AnalysisAgg --> AnalysisCompletedEvent : генерирует
+}
+
+package "Bounded Context: Аналитика и витрины" #E1BEE7 {
+  
+  class "StreamProcessor" as FlinkProcessor {
+    - consumer_group: String
+    - window_size: Duration
+    --
+    + consume_events()
+    + aggregate()
+    + write_to_mart()
+  }
+  
+  class "DataMart" as DataMart {
+    + patient_mart
+    + finance_mart
+    + inventory_mart
+    + staff_mart
+    --
+    + refresh()
+    + query()
+  }
+  
+  class "Событие: DataMartRefreshed" as MartRefreshEvent {
+    + mart_name: String
+    + records_updated: Long
+    + refresh_duration: Duration
+  }
+  
+  FlinkProcessor --> MartRefreshEvent : генерирует
+}
+
+package "Bounded Context: Персонал" #BBDEFB {
+  
+  class "Агрегат: StaffMember" as StaffAgg {
+    - staff_id: UUID
+    - full_name: String
+    - role: String
+    - department_id: UUID
+    - contact_info: ContactInfo
+    --
+    + hire()
+    + update_role()
+    + terminate()
+  }
+  
+  class "Событие: StaffMemberHired" as StaffHiredEvent {
+    + staff_id: UUID
+    + full_name: String
+    + role: String
+    + department_id: UUID
+  }
+  
+  StaffAgg --> StaffHiredEvent : генерирует
+}
+
+package "Bounded Context: Инвентаризация" #BBDEFB {
+  
+  class "Агрегат: InventoryItem" as InventoryAgg {
+    - item_id: UUID
+    - sku: String
+    - name: String
+    - current_stock: Int
+    - reorder_level: Int
+    --
+    + update_stock()
+    + check_threshold()
+  }
+  
+  class "Событие: StockLevelChanged" as StockChangedEvent {
+    + item_id: UUID
+    + item_name: String
+    + previous_level: Int
+    + current_level: Int
+  }
+  
+  InventoryAgg --> StockChangedEvent : генерирует
+}
+
+package "Bounded Context: Безопасность" #E1BEE7 {
+  
+  class "Агрегат: User" as UserAgg {
+    - user_id: UUID
+    - email: String
+    - roles: List
+    - mfa_enabled: Boolean
+    - status: String
+    --
+    + authenticate()
+    + assign_role()
+    + enable_mfa()
+  }
+  
+  class "Событие: UserLoggedIn" as LoginEvent {
+    + user_id: UUID
+    + timestamp: DateTime
+    + ip_address: String
+  }
+  
+  UserAgg --> LoginEvent : генерирует
+}
+
+' ===================== АНТИКОРРУПЦИОННЫЙ СЛОЙ =====================
+package "Антикоррупционный слой (ACL)" #FFE0B2 {
+  
+  class "ClinicACL" as ClinicACL {
+    + transform_legacy_patient()
+    + map_legacy_episode()
+    + anonymize_medical_data()
+  }
+  
+  class "FintechACL" as FintechACL {
+    + sync_bank_transactions()
+    + transform_legacy_credit()
+  }
+}
+
+' ===================== ЛЕГАСИ СИСТЕМЫ =====================
+database "Legacy DWH\nSQL Server 2008" as legacy_dwh
+
+' ===================== СОБЫТИЙНАЯ ПЛАТФОРМА =====================
+database "Apache Kafka" as kafka
+
+' ===================== ВЗАИМОДЕЙСТВИЯ =====================
+
+' Легаси -> ACL -> Kafka
+legacy_dwh --> ClinicACL : CDC (Debezium)
+legacy_dwh --> FintechACL : CDC (Debezium)
+ClinicACL --> kafka : публикует доменные события
+FintechACL --> kafka : публикует доменные события
+
+' Пациентский контекст -> Kafka
+PatientRegEvent --> kafka : публикует
+PatientConsentEvent --> kafka : публикует
+
+' Медицинский контекст -> Kafka (обезличенные данные)
+EpisodeStartEvent --> kafka : публикует
+EpisodeCloseEvent --> kafka : публикует
+
+' Кредитный контекст -> Kafka
+CreditApprovedEvent --> kafka : публикует
+AgreementSignedEvent --> kafka : публикует
+
+' Платёжный контекст -> Kafka
+TxCompletedEvent --> kafka : публикует
+
+' Аналитика -> Kafka
+MartRefreshEvent --> kafka : публикует
+
+' Персонал -> Kafka
+StaffHiredEvent --> kafka : публикует
+
+' Инвентаризация -> Kafka
+StockChangedEvent --> kafka : публикует
+
+' Безопасность -> Kafka
+LoginEvent --> kafka : публикует
+
+' ИИ-анализ -> Kafka
+AnalysisCompletedEvent --> kafka : публикует
+
+' Потребители событий
+kafka --> CreditAppAgg : подписывается на PatientRegistered
+kafka --> AnalysisAgg : подписывается на EpisodeStarted
+kafka --> FlinkProcessor : подписывается на все события
+
+' Потоковая обработка
+FlinkProcessor --> DataMart : записывает витрины
+
+' Медицинский анализ обогащает медзаписи
+AnalysisCompletedEvent --> EpisodeAgg : дополняет результатами
+
+' Аналитика для портала
+DataMart --> "Self-Service Portal" : читает данные
+
+@enduml

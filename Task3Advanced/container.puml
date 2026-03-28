@@ -1,0 +1,158 @@
+@startuml
+!include ../C4/C4_Container.puml
+
+Title Целевая архитектура "Будущее 2.0" - Диаграмма контейнеров (C4 Level 2)
+
+' ==================== ВНЕШНИЕ ПОЛЬЗОВАТЕЛИ ====================
+Person(patient, "Пациент", "Получает медицинские и финансовые услуги")
+Person(doctor, "Врач/Оператор", "Работает с клиентским интерфейсом")
+Person(analyst, "Аналитик", "Сотрудник головного офиса, работает с отчётами")
+Person(regulator, "Регулятор", "Минздрав, ЦБ, налоговые органы")
+Person(partner, "Партнёр", "Фармкомпании, производители оборудования")
+
+' ==================== СКВОЗНЫЕ СЕРВИСЫ ====================
+Container(api_gateway, "API Gateway", "KONG", "Единая точка входа API для всех внешних запросов")
+Container(auth, "Auth Service", "Java", "Аутентификация и авторизация")
+Container(keycloak, "Keycloak", "", "Identity Provider")
+
+' ==================== ДОМЕН: ГОЛОВНОЙ ОФИС ====================
+System_Boundary(head_office_boundary, "Домен «Головной офис»") {
+    Container(self_service_portal, "Портал самообслуживания", "React/Superset", "Конструктор отчётов, визуализация, доступ по ролям")
+    Container(data_marts, "Потоковые витрины данных", "ClickHouse", "Агрегированные данные: клиенты, финансы, персонал, инвентаризация (медицинские данные НЕ включаются)")
+    Container(metadata_catalog, "Каталог данных", "OpenMetadata/DataHub", "Глоссарий, управление метаданными, политики доступа")
+    Container(stream_processor, "Потоковый процессор", "Apache Flink", "Построение витрин в near-real-time из событий")
+    Container(cache_layer, "Кэширующий слой", "Redis", "Кэш для частых запросов к порталу")
+}
+
+' ==================== ДОМЕН: КЛИНИКИ ====================
+System_Boundary(clinics_boundary, "Домен «Клиники»") {
+    Container(web_ui, "Веб-интерфейс", "React/Vue", "Замена PowerBuilder. Интерфейс врача и оператора")
+    
+    Container(patient_service, "Сервис пациентов", "Java", "Управление данными пациентов")
+    ContainerDb(patient_db, "БД пациентов", "PostgreSQL", "")
+    
+    Container(medical_service, "Сервис медзаписей", "Java", "Управление картами, историями болезней (не попадают в аналитику)")
+    ContainerDb(medical_db, "БД медзаписей", "PostgreSQL", "")
+    
+    Container(inventory_service, "Сервис инвентаризации", "Java", "Учёт оборудования, лекарств, расходных материалов")
+    ContainerDb(inventory_db, "БД инвентаризации", "PostgreSQL", "")
+    
+    Container(staff_service, "Сервис персонала", "Java", "Управление данными сотрудников: врачи, операторы, административный персонал")
+    ContainerDb(staff_db, "БД персонала", "PostgreSQL", "")
+    
+    Container(clinic_acl, "ACL Клиники", "Java", "Антикоррупционный слой для интеграции с легаси DWH и Camel")
+}
+
+' ==================== ДОМЕН: ИИ-СЕРВИСЫ ====================
+System_Boundary(ai_boundary, "Домен «ИИ-сервисы»") {
+    Container(ai_processing, "Сервис обработки медданных", "Python", "Диагностика, анализ снимков, выявление патологий")
+    Container(ai_monetization, "Сервис монетизации ИИ", "Golang", "Предоставление ИИ-функций как продукта для партнёров")
+    Container(ai_adapter, "Событийный адаптер ИИ", "Python", "Публикация результатов анализа в событийную платформу")
+}
+
+' ==================== ДОМЕН: ФИНТЕХ ====================
+System_Boundary(fintech_boundary, "Домен «Финтех»") {
+    Container(credit_service, "Кредитный конвейер", "Java", "Выдача кредитов, скоринг, оценка рисков")
+    Container(payment_service, "Платёжный сервис", "Golang", "Обработка транзакций, интеграция с банковскими системами")
+    Container(finance_accounting, "Учёт финансовых данных", "Java", "Счета, выписки, финансовые проводки")
+    Container(fintech_acl, "ACL Финтех", "Java", "Антикоррупционный слой для банковской системы и легаси DWH")
+}
+
+' ==================== ЦЕНТРАЛЬНАЯ СОБЫТИЙНАЯ ПЛАТФОРМА ====================
+System_Boundary(event_platform, "Событийная платформа") {
+    Container(kafka, "Брокер сообщений", "Apache Kafka", "Слабо связанное взаимодействие доменов, событийная шина")
+    Container(schema_registry, "Schema Registry", "Confluent Schema Registry", "Управление схемами событий (Avro/Protobuf)")
+    Container(dlq, "Dead Letter Queue", "Kafka Topics", "Обработка ошибочных событий")
+}
+
+' ==================== ЛЕГАСИ (МОСТЫ СОВМЕСТИМОСТИ) ====================
+System_Boundary(legacy_boundary, "Легаси-системы (этап миграции)") {
+    ContainerDb(legacy_dwh, "DWH", "SQL Server 2008", "Исторический архив, постепенное вытеснение")
+    Container(esb_camel, "ESB", "Apache Camel", "Старая шина данных, используется как мост совместимости")
+    Container(power_bi, "Power BI", "Microsoft Power BI", "Старая BI-система (замещается порталом самообслуживания)")
+    Container(power_builder, "PowerBuilder", "PowerBuilder", "Старый интерфейс операторов (замещается веб-интерфейсом)")
+}
+
+' ==================== СВЯЗИ (ВЗАИМОДЕЙСТВИЯ) ====================
+
+' ---- ВНЕШНИЕ ПОЛЬЗОВАТЕЛИ ----
+Rel(doctor, web_ui, "Использует")
+Rel(patient, web_ui, "Использует")
+Rel(analyst, self_service_portal, "Работает с отчётами")
+Rel(regulator, self_service_portal, "Получает отчётность")
+Rel(partner, ai_monetization, "Покупает ИИ-сервисы")
+
+' ---- СКВОЗНЫЕ СЕРВИСЫ ----
+Rel(web_ui, api_gateway, "Вызывает API")
+Rel(self_service_portal, api_gateway, "Вызывает API для данных")
+Rel(api_gateway, auth, "Проверяет доступ")
+Rel(auth, keycloak, "Интегрируется")
+
+' ---- ДОМЕН: КЛИНИКИ (синхронные вызовы) ----
+Rel(api_gateway, patient_service, "Вызывает API")
+Rel(api_gateway, medical_service, "Вызывает API")
+Rel(api_gateway, inventory_service, "Вызывает API")
+Rel(api_gateway, staff_service, "Вызывает API")
+
+Rel(patient_service, patient_db, "Сохраняет и получает данные")
+Rel(medical_service, medical_db, "Сохраняет и получает данные")
+Rel(inventory_service, inventory_db, "Сохраняет и получает данные")
+Rel(staff_service, staff_db, "Сохраняет и получает данные")
+
+' ---- ИНТЕГРАЦИЯ С ЛЕГАСИ ЧЕРЕЗ ACL ----
+Rel(patient_service, clinic_acl, "Интеграция с легаси")
+Rel(medical_service, clinic_acl, "Интеграция с легаси")
+Rel(inventory_service, clinic_acl, "Интеграция с легаси")
+Rel(staff_service, clinic_acl, "Интеграция с легаси")
+
+' ---- СОБЫТИЙНЫЕ ИНТЕГРАЦИИ ----
+' Клиники публикуют события
+Rel(clinic_acl, kafka, "Публикует события (CDC/доменные события)")
+
+' Домен ИИ
+Rel(ai_processing, ai_adapter, "Передаёт результаты")
+Rel(ai_adapter, kafka, "Публикует события")
+Rel(ai_monetization, kafka, "Подписывается на события")
+
+' Домен Финтех (синхронные вызовы внутри домена)
+Rel(api_gateway, credit_service, "Вызывает API")
+Rel(api_gateway, payment_service, "Вызывает API")
+Rel(api_gateway, finance_accounting, "Вызывает API")
+
+' Финтех события
+Rel(credit_service, kafka, "Подписывается на события клиентов")
+Rel(payment_service, kafka, "Публикует платёжные события")
+Rel(finance_accounting, kafka, "Подписывается/публикует")
+
+' Интеграция финтеха с легаси через ACL
+Rel(credit_service, fintech_acl, "Операции с легаси-данными")
+Rel(payment_service, fintech_acl, "Операции с легаси-данными")
+Rel(finance_accounting, fintech_acl, "Операции с легаси-данными")
+
+' ---- АНАЛИТИКА И ВИТРИНЫ ----
+' Потоковая обработка событий
+Rel(kafka, stream_processor, "Потребляет события (real-time)")
+Rel(stream_processor, data_marts, "Записывает витрины")
+Rel(self_service_portal, data_marts, "Читает агрегированные данные")
+Rel(self_service_portal, metadata_catalog, "Получает метаданные")
+Rel(self_service_portal, cache_layer, "Читает/пишет кэш")
+
+' ---- ИНТЕГРАЦИИ С ЛЕГАСИ ЧЕРЕЗ ACL (мосты совместимости) ----
+Rel(legacy_dwh, clinic_acl, "CDC (Debezium) для миграции данных")
+Rel(esb_camel, clinic_acl, "Мост для старых сервисов")
+Rel(legacy_dwh, fintech_acl, "CDC (Debezium) для миграции данных")
+Rel(esb_camel, fintech_acl, "Мост для банковских систем")
+
+' ---- СТАРЫЕ СИСТЕМЫ (замещаются) ----
+Rel(power_bi, legacy_dwh, "Старые отчёты (замещаются)")
+Rel(power_builder, legacy_dwh, "Старый интерфейс (замещается)")
+
+' ---- УПРАВЛЕНИЕ СХЕМАМИ ----
+Rel(kafka, schema_registry, "Регистрация и валидация схем")
+Rel(stream_processor, schema_registry, "Получает схемы событий")
+
+' ---- ОБРАБОТКА ОШИБОК ----
+Rel(kafka, dlq, "Необработанные события")
+Rel(stream_processor, dlq, "Ошибочные события")
+
+@enduml

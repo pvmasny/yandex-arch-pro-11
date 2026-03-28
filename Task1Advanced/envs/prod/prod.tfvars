@@ -1,0 +1,14 @@
+yc_token = "replace-me-yc"
+cloud_id = "replace-me-dev"
+folder_id = "replace-me-dev-folder-id"
+zone = "ru-central1-a"
+disk_name = "dev-architecture-future_2_0"
+disk_type = "network-ssd"
+disk_size = 100
+vm_name = "dev-vm-architecture-future_2_0"
+cores = 8
+memory = 16
+subnet_id = "dev-replace-me"
+nat = true
+ssh_user = "dev-user"
+ssh_public_key = "replace-me"

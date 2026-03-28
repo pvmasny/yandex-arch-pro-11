@@ -1,0 +1,14 @@
+yc_token = "replace-me-yc"
+cloud_id = "stage-replace-me"
+folder_id = "stage-replace-me-folder-id"
+zone = "ru-central1-a"
+disk_name = "stage-architecture-future_2_0"
+disk_type = "network-ssd"
+disk_size = 50
+vm_name = "stage-vm-architecture-future_2_0"
+cores = 2
+memory = 4
+subnet_id = "stage-replace-me"
+nat = true
+ssh_user = "stage-user-replace-me"
+ssh_public_key = "replace-me"
