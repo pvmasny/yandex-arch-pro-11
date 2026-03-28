@@ -1,0 +1,13 @@
+cloud_id = "b1galsh9qjvv6imgcpm6"
+folder_id = "b1glqjobi0r39khof9pr"
+zone = "ru-central1-a"
+disk_name = "prod-architecture-future_2_0"
+disk_type = "network-ssd"
+disk_size = 100
+vm_name = "prod-vm-architecture-future_2_0"
+cores = 8
+memory = 16
+subnet_id = "e9basu861malsp3sc0pp"
+nat = true
+ssh_user = "ubuntu"
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHqQEOtodVP1fwKOpI4Rll5v+1Ukea+tFj/NijFZwQE9 maspaulus@yandex.ru"

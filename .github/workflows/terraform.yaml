@@ -1,0 +1,119 @@
+name: Task2Advanced Terraform
+
+on:
+  pull_request:
+    paths:
+      - "Task2Advanced/**"
+      - ".github/workflows/terraform.yaml"
+  push:
+    branches: ["main", "draft", "sprint11"]
+    paths:
+      - "Task2Advanced/**"
+      - ".github/workflows/terraform.yaml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  plan:
+    name: terraform plan (Task2Advanced)
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    env:
+      STATE_BUCKET: ${{ secrets.STATE_BUCKET }}
+      STATE_REGION: ${{ secrets.STATE_REGION }}
+      STATE_ENDPOINT: ${{ secrets.STATE_ENDPOINT }}
+      STATE_ACCESS_KEY_ID: ${{ secrets.STATE_ACCESS_KEY }}
+      STATE_SECRET_ACCESS_KEY: ${{ secrets.STATE_SECRET_KEY }}
+      YC_TOKEN: ${{ secrets.YC_TOKEN }}
+    if: github.event_name != 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, stage, prod]
+    defaults:
+      run:
+        working-directory: Task2Advanced/envs/${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform init (S3 backend)
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="key=${{ matrix.env }}/terraform.tfstate" \
+            -backend-config="region=${STATE_REGION}" \
+            -backend-config="endpoint=${STATE_ENDPOINT}" \
+            -backend-config="access_key=${STATE_ACCESS_KEY_ID}" \
+            -backend-config="secret_key=${STATE_SECRET_ACCESS_KEY}" \
+            -backend-config="use_path_style=true" \
+            -backend-config="skip_region_validation=true" \
+            -backend-config="skip_credentials_validation=true" \
+            -backend-config="skip_requesting_account_id=true"
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -no-color -var="yc_token=${YC_TOKEN}" -var-file=${{ matrix.env }}.tfvars
+
+  apply:
+    name: terraform apply (manual)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    environment: ${{ github.event.inputs.environment }}
+    defaults:
+      run:
+        working-directory: Task2Advanced/envs/${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform init (S3 backend)
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="key=${{ inputs.environment }}/terraform.tfstate" \
+            -backend-config="region=${STATE_REGION}" \
+            -backend-config="endpoint=${STATE_ENDPOINT}" \
+            -backend-config="access_key=${STATE_ACCESS_KEY_ID}" \
+            -backend-config="secret_key=${STATE_SECRET_ACCESS_KEY}" \
+            -backend-config="use_path_style=true" \
+            -backend-config="skip_region_validation=true" \
+            -backend-config="skip_credentials_validation=true" \
+            -backend-config="skip_requesting_account_id=true"
+        env:
+          STATE_BUCKET: ${{ secrets.STATE_BUCKET }}
+          STATE_REGION: ${{ secrets.STATE_REGION }}
+          STATE_ENDPOINT: ${{ secrets.STATE_ENDPOINT }}
+          STATE_ACCESS_KEY_ID: ${{ secrets.STATE_ACCESS_KEY }}
+          STATE_SECRET_ACCESS_KEY: ${{ secrets.STATE_SECRET_KEY }}
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve -var="yc_token=${{ secrets.YC_TOKEN }}" -var-file=${{ inputs.environment }}.tfvars
+        env:
+          YC_TOKEN: ${{ secrets.YC_TOKEN }}
+          STATE_ACCESS_KEY_ID: ${{ secrets.STATE_ACCESS_KEY }}
+          STATE_SECRET_ACCESS_KEY: ${{ secrets.STATE_SECRET_KEY }}
